@@ -1,0 +1,216 @@
+---
+title: "UFO Sightings"
+author: "Mary Glantz"
+date: "8/5/2020"
+output:
+  html_document: default
+  word_document: default
+  pdf_document: default
+---
+
+```{r setup, include=FALSE}
+knitr::opts_chunk$set(echo = TRUE)
+```
+
+
+## Context
+This dataset contains over 80,000 reports of UFO sightings over the last century.
+
+## Content
+There are two versions of this dataset: scrubbed and complete. The complete data includes entries where the location of the sighting was not found or blank (0.8146%) or have an erroneous or blank time (8.0237%). Since the reports date back to the 20th century, some older data might be obscured. Data contains city, state, time, description, and duration of each sighting.  We have chosen to work with the scrubbed dataset.
+
+When exploring the data, we noticed most of the reports came from English-speaking countries, and that large chunks of the world were missing.  As a result, we looked up the National UFO Reporting Center's (NUFORC's) website and noticed that it was only in English.  This could explain the geographical concentration of the data.  Further information on NUFORC and up-to-date datasets are available here:  <em>http://www.nuforc.org/</em>. 
+
+## Questions
+The data compilers suggested the following questions:
+What areas of the country are most likely to have UFO sightings?
+Are there any trends in UFO sightings over time? Do they tend to be clustered or seasonal?
+Do clusters of UFO sightings correlate with landmarks, such as airports or government research centers?
+What are the most common UFO descriptions?
+
+We decided to look at the data and formulate our own questions, many of which coincide with what the compilers laid out. I will be exploring two questions:  1) are sightings clustered in time; and 2) are there more sightings in certain countries and in areas of those countries.
+
+#### Acknowledgement
+This dataset was scraped, geolocated, and time standardized from NUFORC data by Sigmond Axel \here <em>https://github.com/planetsig/ufo-reports</em>.  We accessed it from kaggle \here <em>https://www.kaggle.com/NUFORC/ufo-sightings?select=scrubbed.csv</em>.
+
+```{r}
+# load tidyverse to read in data
+
+library(tidyverse)
+ufo_sightings <- read_csv("scrubbed.csv")
+```
+## Structure of the data
+```{r}
+str(ufo_sightings)
+head(ufo_sightings)
+tail(ufo_sightings)
+```
+
+### Description
+
+This dataset includes 80,332 rows and 11 columns.  The columns represent the date/time of the sighting, the location (city, state and country) of the sighting, the shape of the object, the duration (in hours/minutes/seconds) of the sighting, comments describing the sighting, the date posted, and the latitude and longitude of the sighting.
+
+This data is already tidy.  
+
+Because the data includes columns on datetime, city, state, and country, we should be able to organize it and determine if there are any patterns around location and timing.  
+
+I will want to pull out years and times of year (months) in order to see if there are any patterns.  In order to more easily do this, I will convert the datetime column, which is in character format now, into date/time format using lubridate's mdy_hm() function.
+
+
+##### Code to change datetime format
+```{r}
+library(lubridate)
+
+# convert the "datetime" column into date format from character format
+newufo <- mutate(ufo_sightings, datetime = mdy_hm(ufo_sightings$datetime))
+
+
+```
+
+
+To see patterns by year and by month, I will create separate columns for years and months.
+
+#### Code to create new "year" and "month" columns
+```{r}
+newufo <- mutate(newufo, year = year(datetime))
+newufo <- mutate(newufo, month = month(datetime, label = TRUE))
+```
+
+The dataset already includes columns for city, state, and country, so there is no need to change the table to reflect those values.
+
+## Time Patterns
+
+The quickest way to see if there is a pattern to the years when sightings took place is to draw a histogram.
+
+#### Drawing a histogram of sightings per year
+```{r}
+ggplot(data = newufo) + geom_bar(mapping = aes(x = year))
+```
+
+Here we can see that reports of ufo sightings increase as we move closer in time to the present.
+
+We can verify this by counting the number of occurrences per year:
+
+#### Code counting sightings per year
+```{r}
+newufo %>% count(year)
+```
+
+
+
+To see if there is a pattern to the time of year sightings are reported, we can draw a histogram of months.
+
+#### Drawing a histogram of sightings per month
+```{r}
+ggplot(data = newufo) + geom_bar(mapping = aes(x = month))
+```
+
+Sightings seem to occur more often in the summer months, and decline during winter and spring.
+
+We can also verify this by counting the number of occurrences per month:
+
+#### Code to count sightings (n) per month
+
+```{r}
+newufo %>% count(month)
+```
+Now we will get the mean and median values for how many sightings are reported per month, and then filter out the months which are above the mean and above the median.
+
+#### Code for mean, median and for selecting those months greater than the mean and median
+```{r}
+permonth <- count(newufo, month)
+avgsighthings <- mean(permonth$n)
+mediansightings <- median(permonth$n)
+highmonths <- filter(permonth, permonth$n > avgsighthings)
+highmonthsbymedian <- filter(permonth, permonth$n > mediansightings)
+highmonths
+highmonthsbymedian
+
+```
+
+The second half of the year features more sightings per month than the first half.
+
+## Geographical Patterns
+
+Some country names are not available or listed.  A quick check of not-available (NA) values, shows that 9670 entries lack a country identifier.  (That leaves 70662 entries that do have a country.) With a fairly large number of NA's, it is worth looking at what those are.  By filtering them out and scanning the head and tail of the entries, it is clear that many entries that lack a country do have a state listed.  Some of those "states" are Canadian provinces, but the majority are US states simply lacking a country identifier.  I will continue to leave them out of this analysis (to avoid conflating Canada and the United States), but filtering those for entries with neither state nor country provides a list of 3256 rows.  Reading through this list, it is evident that many of these are countries from around the world.  For future analysis, it may be useful to pull the country name out of the city descriptor column and add that to the country column. 
+
+#### Analyzing the NA entries
+```{r}
+missingcountry <- newufo %>% filter( is.na(country))
+head(missingcountry)
+str(missingcountry)
+missingcountry_notUS <- missingcountry %>% filter(is.na(state))
+head(missingcountry_notUS)
+str(missingcountry_notUS)
+
+
+```
+
+
+Analyzing the data only from sightings with a valid country field, there are five countries that have reported UFO sightings.  The US is by far the most common source of reports.  
+
+#### Code for counting number of sightings (n) per country
+```{r}
+countrysightings <- newufo %>% filter(!is.na(country))
+countrysightings %>% count(country)
+ggplot(data = countrysightings) + geom_bar(mapping = aes(x = country))
+
+```
+
+
+
+### Why Germany?
+
+Interestingly, all but 105 of the sightings with identified countries were reported in English-speaking countries.  It is probably worth exploring the reports from Germany to see if there is an explanation for why it is the only non-English speaking country in this data.
+
+#### Code pulling out the Germany sightings from the data
+```{r}
+
+germanysightings <- countrysightings %>% filter(country == "de")
+head(germanysightings)
+tail(germanysightings)
+```
+
+There is no immediate pattern apparent in the Germany sightings.  Some of the sightings are at locations of US military bases, so that may explain some of the reports.  At least one of the comments, however, is written in French, suggesting it was not written by an American servicemember.
+
+By examining the year column, we can see if there is a pattern to the time period these were reported.
+
+
+#### Code counting the sightings (n) per year in Germany
+```{r}
+germanysightings %>% count(year)
+ggplot(data = germanysightings) + geom_bar(mapping = aes(x = year))
+```
+
+This histogram and table show the sightings were fairly evenly spread out (with 1 or 2 every couple years) until the 2000s when the numbers increased, reaching an anomalous high of 15 in 2008.  The increase into the 2000s tracks with what we saw with the overall increase in reports of UFO sightings worldwide in the late 1990s and 2000s.
+
+### Difference between Northern and Southern Hemispheres?
+
+The overall data showed the majority of sightings took place between June and November, summer and autumn in the northern hemisphere.  Does this hold true for the sightings reported from Australia in the southern hemisphere:
+
+#### Code pulling out sightings per month in Australia
+```{r}
+australiasightings <- countrysightings %>% filter(country == "au")
+australiasightings %>% count(month)
+ggplot(data = australiasightings) + geom_bar(mapping = aes(x = month))
+```
+
+Calculating the mean and the median for number of sightings per month, we can see which months are higher than average and median.
+
+
+#### Code calculating the mean, median and months above the mean and median in Australia.
+```{r}
+permonthAU <- count(australiasightings, month)
+avgsighthingsAU <- mean(permonthAU$n)
+mediansightingsAU <- median(permonthAU$n)
+highmonthsAU <- filter(permonthAU, permonthAU$n > avgsighthingsAU)
+highmonthsbymedianAU <- filter(permonthAU, permonthAU$n > mediansightingsAU)
+highmonthsAU
+highmonthsbymedianAU
+```
+
+
+The monthly pattern in the southern hemisphere appears to be opposite that in the northern hemisphere.  The months with the most sightings are January through June -- southern hemisphere summer and fall.  Thus, it seems that UFO sightings are reported most often in the summer and fall in both hemispheres.
+
+Possible explanations for this are that there are more people outside in the summer to see and report UFOs or, of course, that extra-terrestrial beings prefer to visit Earth (or at least the English-speaking parts of Earth and Germany) during the summer season.  
+
